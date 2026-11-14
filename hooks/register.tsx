@@ -31,12 +31,14 @@ const SCENE_LIVE = 'maid-room-live'
 const LIVE = SCENE.replace('</style>', `${MOTION}</style>`)
 const STATUS = '女仆小屋 · 慢慢来'
 
-// 两种背景画法：
+// 三种背景画法：
 // vector（默认）：纯矢量场景。桌面端的背景场景只画矢量，插画由 tools/build_scene.py 描摹成路径，
 //   受 131072 字符上限限制，细节是简化过的，但一定能显示。
 // image：直接用位图 assets/backdrop.jpg（tools/compose_backdrop.py 合成），画质是原图水平；
 //   有的 App 版本不画图片背景，那时会退回 App 自带的底色，用 /maid-room vector 切回来即可。
-type Mode = 'vector' | 'image'
+// plain：只换配色，不画背景图。App 会记住插件设置过的配色，会话被收掉再唤醒时，
+//   界面一开始就是奶油色，不会出现“先默认外观、再换成插画”的那一下切换。
+type Mode = 'vector' | 'image' | 'plain'
 
 // 聊天栏、侧栏都是盖在背景上的毛玻璃面板，人物有一大半在聊天栏底下。
 // veil（0 到 100）是这层面板的浓度：越小人物越清楚，越大文字越好读。
@@ -46,7 +48,9 @@ const DEFAULT_VEIL = 35
 type Settings = { mode: Mode; veil: number; motion: boolean }
 
 const look = ({ mode, veil, motion }: Settings): ThemeSetArgs =>
-  mode === 'image'
+  mode === 'plain'
+    ? { colors: theme }
+    : mode === 'image'
     ? { colors: theme, backdrop: { image: { source: 'assets/backdrop.jpg' } } }
     : {
         colors: theme,
@@ -56,13 +60,13 @@ const look = ({ mode, veil, motion }: Settings): ThemeSetArgs =>
         },
       }
 
-const isMode = (value: unknown): value is Mode => value === 'vector' || value === 'image'
+const isMode = (value: unknown): value is Mode => value === 'vector' || value === 'image' || value === 'plain'
 
 const isVeil = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
 
 const USAGE =
-  '用法：/maid-room motion on 或 off（背景动画，默认关）；/maid-room veil 0到100（聊天栏面板的浓度，越小人物越清楚，越大文字越好读）；/maid-room vector（矢量背景，一定能显示）；/maid-room image（位图原画，部分 App 版本不显示）'
+  '用法：/maid-room motion on 或 off（背景动画，默认关）；/maid-room veil 0到100（聊天栏面板的浓度，越小人物越清楚，越大文字越好读）；/maid-room vector（矢量背景，一定能显示）；/maid-room plain（只换配色，不画背景图，切换会话时最平稳）；/maid-room image（位图原画，部分 App 版本不显示）'
 
 // 读出上次保存的选择（跨会话保留），没存过或存坏了就用默认值
 const stored = async ($: { store: { get: (key: string) => Promise<unknown> } }) => {
@@ -96,7 +100,7 @@ export const register: Register = on => {
     }
     await $.command.register({
       name: 'maid-room',
-      description: '调整女仆小屋主题：motion on/off 开关动画，veil 0到100 调人物清晰度，vector 或 image 切换背景画法',
+      description: '调整女仆小屋主题：motion on/off 开关动画，veil 0到100 调人物清晰度，vector、plain 或 image 切换背景画法',
     })
 
     return next(e)
@@ -122,6 +126,9 @@ export const register: Register = on => {
 
     if (!set.isDrawn) {
       return { text: `已保存（背景 ${now.mode}，动画 ${now.motion ? '开' : '关'}，面板浓度 ${now.veil}），但暂未绘制：${set.reason}` }
+    }
+    if (word === 'plain') {
+      return { text: '已切到只换配色：不画背景图，切换会话时外观不会再跳一下。想要回插画，用 /maid-room vector。' }
     }
     if (word === 'image') {
       return {
