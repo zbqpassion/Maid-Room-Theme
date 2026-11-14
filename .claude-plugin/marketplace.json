@@ -1,0 +1,6 @@
+{
+  "name": "maid-room-theme",
+  "description": "女仆小屋：Claude Code 桌面端的暖色奶油风主题",
+  "owner": { "name": "zbqpassion" },
+  "plugins": [{ "name": "maid-room", "source": "./" }]
+}
