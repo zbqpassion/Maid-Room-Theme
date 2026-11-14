@@ -12,11 +12,13 @@
 
 场景结构（根 svg 无 viewBox，铺满窗口）：
 1. 奶油色底 + 几团暖色柔光（居中 slice 层）
-2. 装饰：左上角窗格投下的光、底部层叠的剪纸波浪（蕾丝圆点、细金线）、左下角落花荡开的波纹（见 decor）
-3. 右下角（右下对齐 meet 层，始终完整可见，整体上移一点让脚露在输入框上方）：
-   a. 房间（画在波浪下面）：把人物从原图里抹掉、整体模糊、向页面底色渐隐，再描成几块色斑并加模糊滤镜，
+2. 装饰（见 decor）：左上角窗格投下的光、底部层叠的剪纸波浪、第一层水面上落花荡开的波纹、
+   人物坐的软垫、漂着的花瓣
+3. 右下角（右下对齐 meet 层，始终完整可见，整体上移一点让脚露在输入框上方），分三段穿插在装饰之间：
+   a. 房间（最后面，颜色压淡，只留一点氛围）：把人物从原图里抹掉、整体模糊、向页面底色渐隐，再描成几块色斑并加模糊滤镜，
       得到一片柔焦的卧室氛围，边缘自然融进页面
-   b. 人物（画在波浪上面）：按 mask 抠出后精描；脸部另用更高分辨率描一小块叠在上面
+   b. 软垫（夹在第一层波浪和其余波浪之间）
+   c. 人物（最前面）：按 mask 抠出后精描；脸部另用更高分辨率描一小块叠在上面
 窗口宽度小于 900 像素时右下角整层隐藏，避免挡住正文。
 """
 import os
@@ -42,6 +44,7 @@ SHOW_H = 760                     # 插画在这一层里显示的高度
 LIFT = 70                        # 插画整体上移的量：让脚露在输入框上方，不被挡住
 FACE_BOX = (340, 185, 540, 370)  # 原图里脸部的范围（x0, y0, x1, y1），单独精描
 ROOM_BLUR = 9                    # 房间的模糊半径（右下角层的单位）
+ROOM_STRENGTH = .6               # 房间的浓度：压淡一些，深色块不抢人物，也不显脏
 GLOWS = [(120, 60, 620, '#ffe3c2', .55), (900, 180, 520, '#fff7ec', .7), (1380, 520, 640, '#fbd9bd', .38)]
 
 rgb_full = np.array(Image.open(SRC).convert('RGB'))
@@ -69,7 +72,7 @@ def room_part(scale=0.2, k=10, eps=1.2):
     weight = weight * weight * (3 - 2 * weight)   # 平滑过渡
     # 插画上移后底边不再贴着窗口底，所以底部也要淡出，不然地板会留下一条硬边
     foot = np.clip((1.0 - yy / h) / .13, 0, 1)
-    weight = (weight * foot * foot * (3 - 2 * foot))[:, :, None]
+    weight = (weight * foot * foot * (3 - 2 * foot))[:, :, None] * ROOM_STRENGTH
     faded = (filled * weight + np.array(PAGE, np.float32) * (1 - weight)).astype(np.uint8)
     alpha = np.full((h, w), 255, np.uint8)
     centers = palette(faded, alpha, k)
@@ -112,16 +115,21 @@ def group(part):
 
 
 # 底部的层叠波浪（坐标系 1600x420 的底部条带，横向拉伸）：基线、振幅、波长、相位、颜色、浓度
-# 颜色取自插画里的杏色、蜜桃色和裙摆的橙，从远到近逐层加深，像几层叠起来的剪纸
+# 颜色取自插画里的杏色、蜜桃色和裙摆的橙，从远到近逐层加深，像几层叠起来的剪纸。
+# 第一层和第二层之间留得宽一些，当作水面，落花的波纹就画在这一层上
 WAVES = [
     (110, 24, 1180, 0, '#f2cfb3', .8),
-    (168, 28, 1420, -380, '#ecc1a2', .75),
-    (226, 22, 1000, -170, '#e6b090', .75),
-    (288, 20, 1260, -620, '#df9f7b', .75),
-    (346, 14, 880, -300, '#edc2a4', .9),
+    (196, 28, 1420, -380, '#ecc1a2', .75),
+    (250, 22, 1000, -170, '#e6b090', .75),
+    (304, 20, 1260, -620, '#df9f7b', .75),
+    (356, 14, 880, -300, '#edc2a4', .9),
 ]
-POND = (300, 700)   # 左下角“落花荡开的波纹”中心（左下对齐的 1600x1000 层）
-RINGS = [(40, .95), (84, .8), (138, .62), (204, .45), (284, .28)]
+POND = (300, 156)   # 落花的位置（条带坐标），在第一层波浪的水面上
+RINGS = [(40, .95), (86, .8), (142, .62), (210, .45), (292, .3)]
+SHADE = '#a8704c'   # 阴影用的暖棕色
+# 人物坐的软垫（右下角层的坐标）：从人物左边的波浪里隆起，垫在裙子下面，一直到窗口右边
+CUSHION = 'M930 1000V800C1030 770 1090 610 1200 552C1290 506 1430 500 1600 514V1000Z'
+CUSHION_RIM = 'M930 800C1030 770 1090 610 1200 552C1290 506 1430 500 1600 514'
 
 
 def wave_path(baseline, amp, wavelength, x0):
@@ -132,56 +140,76 @@ def wave_path(baseline, amp, wavelength, x0):
     return rim + f'V420H{x0}Z', rim
 
 
-def decor():
-    """装饰层：底部层叠波浪、左下角落花波纹、左上角窗格投下的光。返回 (defs, 正文)。
+def papercut(rim_id, fill, white='#fff'):
+    """剪纸式的一层：顶边线往上错开、加宽、半透明，先画；再画本层，盖住下半截，
+    露出来的就是边缘上方的一道影子；最后描一道白边。不用模糊滤镜，绘制开销很小。"""
+    return (f'<use href="#{rim_id}" stroke-width="18" stroke-opacity=".08" transform="translate(0 -6)"/>'
+            f'<use href="#{rim_id}" stroke-width="7" stroke-opacity=".13" transform="translate(0 -2)"/>'
+            f'{fill}<use href="#{rim_id}" stroke="{white}" stroke-width="1.8" stroke-opacity=".9"/>')
 
-    全部是低对比的暖色，压在正文底下也不影响阅读；不用模糊滤镜，阴影用错位的半透明描边代替，
-    绘制开销很小。"""
+
+def decor():
+    """装饰层，全部是低对比的暖色，压在正文底下也不影响阅读。返回 (defs, 各段正文)。
+
+    从后往前的顺序：窗格的光、第一层波浪和它水面上的落花波纹、软垫、其余几层波浪、漂着的花瓣。
+    后面的波浪会盖住波纹和软垫的下半截，所以波纹只出现在水面那一层，线条不会互相穿插。"""
     defs = ['<path id="pt" d="M0 0q6-9 0-19q-6 10 0 19z"/>',
             '<g id="fl">' + '<use href="#pt"/>' + ''.join(f'<use href="#pt" transform="rotate({a})"/>' for a in range(45, 360, 45)) + '</g>',
-            '<radialGradient id="pool"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>',
-            '<linearGradient id="win" gradientUnits="userSpaceOnUse" x2="330" y2="430"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>']
-    band = []
+            '<radialGradient id="pool"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>',
+            '<linearGradient id="win" gradientUnits="userSpaceOnUse" x2="330" y2="430"><stop offset="0" stop-color="#fff" stop-opacity=".46"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>',
+            # 软垫的填充和描边都向下淡出：波浪是半透明的，不淡出的话软垫的下半截会透出一块生硬的形状
+            '<linearGradient id="cu" gradientUnits="userSpaceOnUse" x2="0" y1="500" y2="790"><stop offset="0" stop-color="#fdf7f0"/><stop offset=".5" stop-color="#f6e3d1" stop-opacity=".95"/><stop offset="1" stop-color="#f0d2ba" stop-opacity="0"/></linearGradient>',
+            '<linearGradient id="cw" gradientUnits="userSpaceOnUse" x2="0" y1="630" y2="780"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>',
+            f'<linearGradient id="cd" gradientUnits="userSpaceOnUse" x2="0" y1="630" y2="780"><stop offset="0" stop-color="{SHADE}"/><stop offset="1" stop-color="{SHADE}" stop-opacity="0"/></linearGradient>',
+            f'<path id="rc" d="{CUSHION_RIM}"/>']
+    layers = []
     for i, (base, amp, wl, shift, color, op) in enumerate(WAVES):
         fill_d, rim_d = wave_path(base, amp, wl, -200 + shift)
         defs.append(f'<linearGradient id="w{i}" x2="0" y2="1"><stop offset="0" stop-color="{color}" stop-opacity="{op * .6:.2f}"/><stop offset="1" stop-color="{color}" stop-opacity="{op}"/></linearGradient>')
         # 顶边线只定义一次，后面用 <use> 复用；描边宽度按屏幕像素算，不跟着条带的横向拉伸变形
         defs.append(f'<path id="r{i}" d="{rim_d}" vector-effect="non-scaling-stroke"/>')
-        # 剪纸阴影：顶边线往上错开、加宽、半透明，先画；再画本层，盖住下半截，露出来的就是边缘上方的一道影子
-        band.append(f'<use href="#r{i}" stroke-width="18" stroke-opacity=".09" transform="translate(0 -6)"/>'
-                    f'<use href="#r{i}" stroke-width="7" stroke-opacity=".14" transform="translate(0 -2)"/>'
-                    f'<path d="{fill_d}" fill="url(#w{i})" stroke="none"/>'
-                    f'<use href="#r{i}" stroke="#fff" stroke-width="1.8" stroke-opacity=".9"/>')
-    # 第二层边缘缀一串蕾丝圆点，第四层下方走一道细金线，呼应裙边的蕾丝和金色滚边
-    band.append('<use href="#r1" stroke="#fff" stroke-width="3.6" stroke-opacity=".95" stroke-dasharray="0 11" stroke-linecap="round" transform="translate(0 9)"/>'
-                '<use href="#r3" stroke="#b97a42" stroke-width="1.3" stroke-opacity=".7" transform="translate(0 12)"/>')
-    waves = ('<svg y="58%" width="100%" height="42%" viewBox="0 0 1600 420" preserveAspectRatio="none">'
-             f'<g fill="none" stroke="#9a6446">{"".join(band)}</g></svg>')
+        if i == 0:
+            defs.append(f'<clipPath id="c0"><path d="{fill_d}"/></clipPath>')
+        layers.append(papercut(f'r{i}', f'<path d="{fill_d}" fill="url(#w{i})" stroke="none"/>'))
+
+    def band(body):
+        return ('<svg y="58%" width="100%" height="42%" viewBox="0 0 1600 420" preserveAspectRatio="none">'
+                f'<g fill="none" stroke="{SHADE}">{body}</g></svg>')
 
     cx, cy = POND
-    ry = .3
-    rings = ''.join(f'<ellipse cx="{cx}" cy="{cy}" rx="{r}" ry="{r * ry:.0f}" stroke-opacity="{o}"/>' for r, o in RINGS)
-    pond = (f'<ellipse cx="{cx}" cy="{cy}" rx="340" ry="104" fill="url(#pool)"/>'
-            # 每道波纹下面错开 3 个单位描一道暗边，像水面的起伏
-            f'<g fill="none" stroke="#9a6446" stroke-width="3" stroke-opacity=".5" transform="translate(0 4)" opacity=".5">{rings}</g>'
-            f'<g fill="none" stroke="#fff" stroke-width="2.2">{rings}</g>'
-            # 落在水面上的一朵橙花（和发饰同款），压扁一点表示平躺；下面一小片影子
-            f'<ellipse cx="{cx}" cy="{cy + 7}" rx="34" ry="9" fill="#9a6446" fill-opacity=".25"/>'
-            f'<use href="#fl" fill="#e9843f" transform="translate({cx} {cy}) scale(1.8 .9)"/>'
-            f'<use href="#fl" fill="#f6b27a" transform="translate({cx} {cy - 1}) scale(1 .5) rotate(22)"/>'
-            f'<circle cx="{cx}" cy="{cy - 1}" r="5" fill="#b8541d"/>'
-            # 几片随波漂开的花瓣
-            '<g fill="#e8833f" fill-opacity=".85">'
-            + ''.join(f'<use href="#pt" transform="translate({x} {y}) rotate({a}) scale({s})"/>'
-                      for x, y, a, s in [(560, 740, 70, 1.1), (680, 660, 140, .9), (130, 790, -40, 1), (820, 760, 100, .8), (430, 590, 20, .75)])
-            + '</g>')
-    corner = f'<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMax meet">{pond}</svg>'
-    # 左上角：窗格投在墙上的光（原画里窗户在左边），斜着拉长，很淡
-    window = ('<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMin meet">'
-              '<g transform="matrix(1 .1 -.42 1 250 30)" fill="url(#win)">'
-              '<rect width="150" height="200"/><rect x="164" width="150" height="200"/>'
-              '<rect y="214" width="150" height="200"/><rect x="164" y="214" width="150" height="200"/></g></svg>')
-    return defs, window + waves + corner
+    rings = ''.join(f'<ellipse cx="{cx}" cy="{cy}" rx="{r}" ry="{r * .17:.0f}" stroke-opacity="{o}"/>' for r, o in RINGS)
+    pond = ('<g clip-path="url(#c0)">'
+            f'<ellipse cx="{cx}" cy="{cy}" rx="360" ry="62" fill="url(#pool)" stroke="none"/>'
+            # 每道波纹下面错开一点描一道暗边，像水面的起伏
+            f'<g stroke-width="2.6" transform="translate(0 2.5)" opacity=".5">{rings}</g>'
+            f'<g stroke="#fff" stroke-width="2">{rings}</g></g>'
+            # 落在水面上的一朵橙花（和发饰同款），压扁表示平躺；下面一小片影子
+            f'<g stroke="none"><ellipse cx="{cx}" cy="{cy + 5}" rx="32" ry="7" fill="{SHADE}" fill-opacity=".28"/>'
+            f'<use href="#fl" fill="#e9843f" transform="translate({cx} {cy}) scale(1.8 .72)"/>'
+            f'<use href="#fl" fill="#f6b27a" transform="translate({cx} {cy - 1}) scale(1 .4) rotate(22)"/>'
+            f'<ellipse cx="{cx}" cy="{cy - 1}" rx="5" ry="3.4" fill="#b8541d"/></g>')
+    back = (
+        # 左上角：窗格投在墙上的光（原画里窗户在左边），斜着拉长，很淡
+        '<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMin meet">'
+        '<g transform="matrix(1 .1 -.42 1 250 30)" fill="url(#win)">'
+        '<rect width="150" height="200"/><rect x="164" width="150" height="200"/>'
+        '<rect y="214" width="150" height="200"/><rect x="164" y="214" width="150" height="200"/></g></svg>'
+        + band(layers[0] + pond))
+    # 软垫和波浪同一种剪纸画法；边上缀一串蕾丝圆点，呼应裙边的蕾丝
+    cushion = ('<g fill="none" stroke="url(#cd)">' + papercut('rc', f'<path d="{CUSHION}" fill="url(#cu)" stroke="none"/>', 'url(#cw)')
+               + '<use href="#rc" stroke="url(#cw)" stroke-width="3.4" stroke-opacity=".95" stroke-dasharray="0 10" stroke-linecap="round" transform="translate(0 11)"/></g>')
+    front = (band(''.join(layers[1:])
+                  # 第四层下方走一道细金线，呼应裙摆的金色滚边
+                  + '<use href="#r3" stroke="#b97a42" stroke-width="1.3" stroke-opacity=".7" transform="translate(0 12)"/>')
+             # 几片随波漂开的花瓣
+             + '<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMax meet"><g fill="#e8833f" fill-opacity=".85">'
+             + ''.join(f'<use href="#pt" transform="translate({x} {y}) rotate({a}) scale({s})"/>'
+                       for x, y, a, s in [(600, 800, 70, 1.1), (760, 690, 140, .9), (120, 860, -40, 1), (900, 880, 100, .8), (470, 610, 20, .75)])
+             + '</g></svg>')
+    # 两只脚落在波浪上的接触影子，让人物踩实
+    feet = ''.join(f'<ellipse cx="{x}" cy="{y}" rx="{rx}" ry="{ry}" fill="{SHADE}" fill-opacity="{o}"/>'
+                   for x, y, rx, ry, o in [(1254, 890, 52, 9, .12), (1254, 890, 32, 5, .2), (1358, 822, 44, 8, .12), (1358, 822, 26, 4.5, .2)])
+    return defs, back, cushion, front, feet
 
 
 def build(cfg):
@@ -191,12 +219,12 @@ def build(cfg):
     for i, (cx, cy, r, color, op) in enumerate(GLOWS):
         defs.append(f'<radialGradient id="g{i}"><stop offset="0" stop-color="{color}" stop-opacity="{op}"/><stop offset="1" stop-color="{color}" stop-opacity="0"/></radialGradient>')
         glows.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="url(#g{i})"/>')
-    decor_defs, decor_body = decor()
-    # 右下角分两层：房间在波浪下面，人物在波浪上面。房间向页面底色渐隐，
-    # 如果压在波浪上会露出一块浅色的方形边，所以让波浪盖住房间的下半截，人物再坐在波浪上
+    decor_defs, back, cushion, front, feet = decor()
+    # 右下角分三段穿插在装饰之间：房间在最后面，软垫夹在第一层波浪和其余波浪之间，人物在最前面
     side_open = f'<svg class="side" width="100%" height="100%" viewBox="0 0 {LAYER_W} {LAYER_H}" preserveAspectRatio="xMaxYMax meet">'
     room, *figure = parts(cfg)
-    side = side_open + group(room) + '</svg>' + decor_body + side_open + ''.join(group(p) for p in figure) + '</svg>'
+    side = (side_open + group(room) + '</svg>' + back + side_open + cushion + '</svg>' + front
+            + side_open + feet + ''.join(group(p) for p in figure) + '</svg>')
     css = '@media (max-width:900px){.side{display:none}}'
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">'
             f'<defs>{"".join(defs + decor_defs)}</defs><style>{css}</style>'
@@ -211,6 +239,9 @@ CANDIDATES = [
     (0.42, 24, 1.0, 8, 1.0, 6, 0.7),
     (0.40, 24, 1.0, 8, 1.0, 6, 0.7),
     (0.40, 22, 1.0, 8, 0.9, 6, 0.8),
+    (0.40, 22, 1.0, 8, 0.85, 5, 0.8),
+    (0.395, 22, 1.0, 8, 0.85, 5, 0.8),
+    (0.39, 22, 1.0, 8, 0.85, 5, 0.8),
     (0.38, 22, 1.0, 8, 0.9, 6, 0.8),
     (0.36, 22, 1.0, 8, 0.8, 6, 0.8),
     (0.34, 20, 1.1, 9, 0.8, 5, 0.8),
