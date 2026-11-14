@@ -181,19 +181,23 @@ def decor():
     pond = ('<g clip-path="url(#c0)">'
             f'<ellipse cx="{cx}" cy="{cy}" rx="360" ry="62" fill="url(#pool)" stroke="none"/>'
             # 每道波纹下面错开一点描一道暗边，像水面的起伏
-            f'<g stroke-width="1.6" transform="translate(0 1.5)" opacity=".18">{rings}</g>'
-            f'<g stroke="#fff" stroke-width="1.3">{rings}</g></g>'
+            f'<g class="rp" stroke-width="1.6" transform="translate(0 1.5)" opacity=".18">{rings}</g>'
+            f'<g class="rp" stroke="#fff" stroke-width="1.3">{rings}</g></g>'
             # 落在水面上的一朵橙花（和发饰同款），压扁表示平躺；下面一小片影子
             f'<g stroke="none"><ellipse cx="{cx}" cy="{cy + 5}" rx="30" ry="6" fill="{SHADE}" fill-opacity=".14"/>'
-            f'<use href="#fl" fill="#e9843f" transform="translate({cx} {cy}) scale(1.8 .72)"/>'
+            f'<g class="fw"><use href="#fl" fill="#e9843f" transform="translate({cx} {cy}) scale(1.8 .72)"/>'
             f'<use href="#fl" fill="#f6b27a" transform="translate({cx} {cy - 1}) scale(1 .4) rotate(22)"/>'
-            f'<ellipse cx="{cx}" cy="{cy - 1}" rx="5" ry="3.4" fill="#b8541d"/></g>')
+            f'<ellipse cx="{cx}" cy="{cy - 1}" rx="5" ry="3.4" fill="#b8541d"/></g></g>')
     back = (
         # 左上角：窗格投在墙上的光（原画里窗户在左边），斜着拉长，很淡
         '<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMin meet">'
-        '<g transform="matrix(1 .1 -.42 1 250 30)" fill="url(#win)">'
+        '<g class="wl" transform="matrix(1 .1 -.42 1 250 30)" fill="url(#win)">'
         '<rect width="150" height="200"/><rect x="164" width="150" height="200"/>'
-        '<rect y="214" width="150" height="200"/><rect x="164" y="214" width="150" height="200"/></g></svg>'
+        '<rect y="214" width="150" height="200"/><rect x="164" y="214" width="150" height="200"/></g>'
+        # 光里的几粒浮尘，静态时几乎看不见，动起来才明显
+        '<g class="du" fill="#fff" fill-opacity=".8">'
+        + ''.join(f'<circle cx="{x}" cy="{y}" r="{r}"/>' for x, y, r in [(210, 380, 2.2), (330, 300, 1.6), (420, 410, 2.6), (262, 222, 1.4), (482, 250, 1.8)])
+        + '</g></svg>'
         + band(layers[0] + pond))
     # 软垫和波浪同一种剪纸画法；边上缀一串蕾丝圆点，呼应裙边的蕾丝
     cushion = ('<g fill="none" stroke="url(#cd)">' + papercut('rc', f'<path d="{CUSHION}" fill="url(#cu)" stroke="none"/>', 'url(#cw)')
@@ -202,7 +206,7 @@ def decor():
                   # 第四层下方走一道细金线，呼应裙摆的金色滚边
                   + '<use href="#r3" stroke="#b97a42" stroke-width="1.1" stroke-opacity=".45" transform="translate(0 12)"/>')
              # 几片随波漂开的花瓣
-             + '<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMax meet"><g fill="#e8833f" fill-opacity=".85">'
+             + '<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMax meet"><g class="pe" fill="#e8833f" fill-opacity=".85">'
              + ''.join(f'<use href="#pt" transform="translate({x} {y}) rotate({a}) scale({s})"/>'
                        for x, y, a, s in [(600, 800, 70, 1.1), (760, 690, 140, .9), (120, 860, -40, 1), (900, 880, 100, .8), (470, 610, 20, .75)])
              + '</g></svg>')
@@ -233,6 +237,41 @@ def build(cfg):
             f'{side}</svg>')
 
 
+# 动态版的样式（/maid-room motion on 时插进 SVG 的 <style>）。只动左下角和左上角的小东西，
+# 远离人物和正文：
+# - 波纹：五道同样的圈错开时间，从花心向外扩散、淡出，循环不断
+# - 落花：随水面轻轻起伏
+# - 花瓣：沿水面慢慢漂走、淡出，再从原处出现
+# - 窗格光：缓慢地明暗呼吸；光里的浮尘慢慢上飘
+# 省电：每个动画都用 steps() 按每秒 FPS 帧跳变，错开的时间也是帧长的整数倍，
+# 所以所有动画在同一批时刻一起变，两次变化之间画面不动、不用重画。
+# 实测（无界面 Edge）比每帧都变的平滑动画省约四成 CPU。系统开了“减少动态效果”时全部停住。
+FPS = 15
+
+
+def _anim(name, seconds):
+    return f'{name} {seconds}s steps({round(seconds * FPS)}) infinite'
+
+
+def _stagger(sel, n, seconds):
+    step = seconds / n
+    assert abs(step * FPS - round(step * FPS)) < 1e-9, f'{sel} 的错开时间要是帧长的整数倍'
+    return ''.join(f'{sel}:nth-child({i + 1}){{animation-delay:-{step * i:g}s}}' for i in range(1, n))
+
+
+MOTION = (
+    '@keyframes rp{0%{rx:24px;ry:4px;opacity:0}12%{opacity:1}100%{rx:300px;ry:51px;opacity:0}}'
+    f'.rp ellipse{{stroke-opacity:.55;animation:{_anim("rp", 8)}}}' + _stagger('.rp ellipse', 5, 8)
+    + f'@keyframes bob{{50%{{translate:0 -2.5px}}}}.fw{{animation:{_anim("bob", 8)}}}'
+    + f'@keyframes br{{50%{{opacity:.6}}}}.wl{{animation:{_anim("br", 20)}}}'
+    + '@keyframes dr{0%{translate:0 0;opacity:0}12%,85%{opacity:1}100%{translate:150px -24px;opacity:0}}'
+    f'.pe use{{animation:{_anim("dr", 22)}}}' + _stagger('.pe use', 5, 22)
+    + '@keyframes du{0%{translate:0 0;opacity:0}30%,70%{opacity:1}100%{translate:18px -70px;opacity:0}}'
+    f'.du circle{{animation:{_anim("du", 14)}}}' + _stagger('.du circle', 5, 14)
+    + '@media (prefers-reduced-motion:reduce){*{animation:none!important}}'
+)
+
+
 # 从细到粗依次尝试，挑第一个不超预算的
 # （整体缩放、颜色数、化简误差、最小面积、脸部缩放、脸部补色数、脸部化简误差）
 CANDIDATES = [
@@ -253,7 +292,7 @@ def pick():
     for cfg in CANDIDATES:
         svg = build(cfg)
         print(f'尝试 {cfg}：{len(svg)} 字符')
-        if len(svg) <= LIMIT - 512:
+        if len(svg) + len(MOTION) <= LIMIT - 256:
             return cfg, svg
     raise SystemExit(f'场景超出 {LIMIT} 字符上限')
 
@@ -264,8 +303,13 @@ if __name__ == '__main__':
     with open(OUT, 'w', encoding='utf-8') as f:
         f.write('// 由 tools/build_scene.py 生成，不要手改；改布局请改脚本后重新生成\n')
         f.write('export const SCENE = `' + svg + '`\n')
+        f.write('// 动态版：把 MOTION 插进 SCENE 的 <style> 里\n')
+        f.write('export const MOTION = `' + MOTION + '`\n')
     with open(OUT_DTS, 'w', encoding='utf-8') as f:
-        f.write('// 由 tools/build_scene.py 生成\nexport declare const SCENE: string\n')
+        f.write('// 由 tools/build_scene.py 生成\nexport declare const SCENE: string\nexport declare const MOTION: string\n')
+    # 两份 SVG 的独立文件，方便用浏览器直接打开看
     with open(os.path.join(HERE, 'source', 'scene.svg'), 'w', encoding='utf-8') as f:
-        f.write(svg)   # 同一份 SVG 的独立文件，方便用浏览器直接打开看
-    print(f'已生成 {os.path.normpath(OUT)}：{len(svg)} 字符（上限 {LIMIT}），参数 {cfg}')
+        f.write(svg)
+    with open(os.path.join(HERE, 'source', 'scene-live.svg'), 'w', encoding='utf-8') as f:
+        f.write(svg.replace('</style>', MOTION + '</style>', 1))
+    print(f'已生成 {os.path.normpath(OUT)}：静态 {len(svg)} 字符，动态 {len(svg) + len(MOTION)} 字符（上限 {LIMIT}），参数 {cfg}')

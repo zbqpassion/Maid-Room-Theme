@@ -1,7 +1,7 @@
 import type { Register, ThemeSetArgs } from 'claude-code'
 
 import { makeColors } from './make-colors.js'
-import { SCENE } from './scene.js'
+import { MOTION, SCENE } from './scene.js'
 
 // 只做浅色：背景是暖色调的浅色插画（奶油色房间、橙发女仆），
 // 深色模式下浅底配浅字会看不清，所以用 only: 'light' 锁定浅色。
@@ -25,6 +25,10 @@ const { theme, problems } = makeColors({
 })
 
 const SCENE_NAME = 'maid-room'
+// 动态版：同一张图，<style> 里多了动画（波纹扩散、落花起伏、花瓣漂走、窗光呼吸、浮尘上飘）。
+// 按官方示例开 isInteractive，在独立的框里画，只重画动的那几小块；动画按每秒 15 帧跳变，省电
+const SCENE_LIVE = 'maid-room-live'
+const LIVE = SCENE.replace('</style>', `${MOTION}</style>`)
 const STATUS = '女仆小屋 · 慢慢来'
 
 // 两种背景画法：
@@ -39,12 +43,17 @@ type Mode = 'vector' | 'image'
 // 默认 35；模糊跟着浓度走（每 20 加 1），浓度低时不模糊，面板内外的人物才不会一半清楚一半糊。
 const DEFAULT_VEIL = 35
 
-const look = (mode: Mode, veil: number): ThemeSetArgs =>
+type Settings = { mode: Mode; veil: number; motion: boolean }
+
+const look = ({ mode, veil, motion }: Settings): ThemeSetArgs =>
   mode === 'image'
     ? { colors: theme, backdrop: { image: { source: 'assets/backdrop.jpg' } } }
     : {
         colors: theme,
-        backdrop: { scene: SCENE_NAME, glass: { blur: Math.round(veil / 20), opacity: veil / 100 } },
+        backdrop: {
+          scene: motion ? SCENE_LIVE : SCENE_NAME,
+          glass: { blur: Math.round(veil / 20), opacity: veil / 100 },
+        },
       }
 
 const isMode = (value: unknown): value is Mode => value === 'vector' || value === 'image'
@@ -53,15 +62,17 @@ const isVeil = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
 
 const USAGE =
-  '用法：/maid-room veil 0到100（聊天栏面板的浓度，越小人物越清楚，越大文字越好读）；/maid-room vector（矢量背景，一定能显示）；/maid-room image（位图原画，部分 App 版本不显示）'
+  '用法：/maid-room motion on 或 off（背景动画，默认开）；/maid-room veil 0到100（聊天栏面板的浓度，越小人物越清楚，越大文字越好读）；/maid-room vector（矢量背景，一定能显示）；/maid-room image（位图原画，部分 App 版本不显示）'
 
 // 读出上次保存的选择（跨会话保留），没存过或存坏了就用默认值
 const stored = async ($: { store: { get: (key: string) => Promise<unknown> } }) => {
   const mode = await $.store.get('mode')
   const veil = await $.store.get('veil')
-  const settings: { mode: Mode; veil: number } = {
+  const motion = await $.store.get('motion')
+  const settings: Settings = {
     mode: isMode(mode) ? mode : 'vector',
     veil: isVeil(veil) ? veil : DEFAULT_VEIL,
+    motion: typeof motion === 'boolean' ? motion : true,
   }
 
   return settings
@@ -73,7 +84,7 @@ export const register: Register = on => {
     // 读保存的设置是本地文件，很快；注册命令、弹提示都不影响画面，放到后面。
     // 会话启动时客户端可能还没连上，isDrawn 会是 false，但连上后照样会画
     const now = await stored($)
-    await $.theme.set(look(now.mode, now.veil))
+    await $.theme.set(look(now))
     $.ui.status(STATUS)
 
     // 如果有一行会让桌面端整套主题不上色，弹个提示
@@ -84,7 +95,7 @@ export const register: Register = on => {
     }
     await $.command.register({
       name: 'maid-room',
-      description: '调整女仆小屋主题：veil 0到100 调人物清晰度，vector 或 image 切换背景画法',
+      description: '调整女仆小屋主题：motion on/off 开关动画，veil 0到100 调人物清晰度，vector 或 image 切换背景画法',
     })
 
     return next(e)
@@ -94,19 +105,22 @@ export const register: Register = on => {
     const [word = '', value = ''] = e.args.trim().toLowerCase().split(/\s+/)
     const now = await stored($)
 
-    if (word === 'veil' && isVeil(Number(value)) && value !== '') {
+    if (word === 'motion' && (value === 'on' || value === 'off')) {
+      now.motion = value === 'on'
+      await $.store.set('motion', now.motion)
+    } else if (word === 'veil' && isVeil(Number(value)) && value !== '') {
       now.veil = Number(value)
       await $.store.set('veil', now.veil)
     } else if (isMode(word)) {
       now.mode = word
       await $.store.set('mode', now.mode)
     } else {
-      return { text: `当前：背景 ${now.mode}，面板浓度 ${now.veil}。${USAGE}` }
+      return { text: `当前：背景 ${now.mode}，动画 ${now.motion ? '开' : '关'}，面板浓度 ${now.veil}。${USAGE}` }
     }
-    const set = await $.theme.set(look(now.mode, now.veil))
+    const set = await $.theme.set(look(now))
 
     if (!set.isDrawn) {
-      return { text: `已保存（背景 ${now.mode}，面板浓度 ${now.veil}），但暂未绘制：${set.reason}` }
+      return { text: `已保存（背景 ${now.mode}，动画 ${now.motion ? '开' : '关'}，面板浓度 ${now.veil}），但暂未绘制：${set.reason}` }
     }
     if (word === 'image') {
       return {
@@ -114,7 +128,7 @@ export const register: Register = on => {
       }
     }
 
-    return { text: `已应用：背景 ${now.mode}，面板浓度 ${now.veil}。` }
+    return { text: `已应用：背景 ${now.mode}，动画 ${now.motion ? '开' : '关'}，面板浓度 ${now.veil}。` }
   })
 
   on('ui.render', { component: 'Backdrop' }, ($, e, next) => {
@@ -122,19 +136,22 @@ export const register: Register = on => {
     if (
       (e.surface !== 'desktop' && e.surface !== 'mobile') ||
       e.props.plugin !== $.plugin.name ||
-      e.props.scene !== SCENE_NAME
+      (e.props.scene !== SCENE_NAME && e.props.scene !== SCENE_LIVE)
     ) {
       return next(e)
     }
 
     const { Svg } = $.ui.resolve(e)
 
-    // 不开 isInteractive：按一张图绘制，静态、不占 CPU
-    return (
-      <Svg
-        source={SCENE}
-        alt="奶油色房间插画：右下角一位橙色长发、穿黑白女仆装的少女坐在床边，正在整理白色长袜，身后是柔焦的卧室"
-      />
+    const alt =
+      '奶油色房间插画：右下角一位橙色长发、穿黑白女仆装的少女坐在缀着蕾丝边的软垫上，身后是柔焦的卧室，左下角一朵橙花落在水面上荡开波纹'
+
+    // 静态版不开 isInteractive：按一张图绘制，画一次就不再占 CPU。
+    // 动态版开 isInteractive：在独立的框里画，动画只重画动的那几小块，比整张图每帧重画省得多
+    return e.props.scene === SCENE_LIVE ? (
+      <Svg source={LIVE} alt={alt} isInteractive />
+    ) : (
+      <Svg source={SCENE} alt={alt} />
     )
   })
 }
