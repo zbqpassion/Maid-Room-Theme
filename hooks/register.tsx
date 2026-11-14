@@ -118,7 +118,12 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Backdrop' }, ($, e, next) => {
-    if ((e.surface !== 'desktop' && e.surface !== 'mobile') || e.props.scene !== SCENE_NAME) {
+    // 这个钩子会收到每个插件的背景请求，按官方文档同时核对来源插件和场景名，只画自己的
+    if (
+      (e.surface !== 'desktop' && e.surface !== 'mobile') ||
+      e.props.plugin !== $.plugin.name ||
+      e.props.scene !== SCENE_NAME
+    ) {
       return next(e)
     }
 
