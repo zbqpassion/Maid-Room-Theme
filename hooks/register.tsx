@@ -69,6 +69,13 @@ const stored = async ($: { store: { get: (key: string) => Promise<unknown> } }) 
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    // 先设主题：打开会话时界面在等它，越早发出去，默认外观停留得越短。
+    // 读保存的设置是本地文件，很快；注册命令、弹提示都不影响画面，放到后面。
+    // 会话启动时客户端可能还没连上，isDrawn 会是 false，但连上后照样会画
+    const now = await stored($)
+    await $.theme.set(look(now.mode, now.veil))
+    $.ui.status(STATUS)
+
     // 如果有一行会让桌面端整套主题不上色，弹个提示
     const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
 
@@ -79,10 +86,6 @@ export const register: Register = on => {
       name: 'maid-room',
       description: '调整女仆小屋主题：veil 0到100 调人物清晰度，vector 或 image 切换背景画法',
     })
-    const now = await stored($)
-    // 会话启动时客户端可能还没连上，isDrawn 会是 false，但连上后照样会画
-    await $.theme.set(look(now.mode, now.veil))
-    $.ui.status(STATUS)
 
     return next(e)
   })
