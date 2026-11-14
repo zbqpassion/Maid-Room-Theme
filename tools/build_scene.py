@@ -181,10 +181,10 @@ def decor():
     pond = ('<g clip-path="url(#c0)">'
             f'<ellipse cx="{cx}" cy="{cy}" rx="360" ry="62" fill="url(#pool)" stroke="none"/>'
             # 每道波纹下面错开一点描一道暗边，像水面的起伏
-            f'<g stroke-width="2.6" transform="translate(0 2.5)" opacity=".5">{rings}</g>'
+            f'<g stroke-width="1.6" transform="translate(0 1.5)" opacity=".18">{rings}</g>'
             f'<g stroke="#fff" stroke-width="2">{rings}</g></g>'
             # 落在水面上的一朵橙花（和发饰同款），压扁表示平躺；下面一小片影子
-            f'<g stroke="none"><ellipse cx="{cx}" cy="{cy + 5}" rx="32" ry="7" fill="{SHADE}" fill-opacity=".28"/>'
+            f'<g stroke="none"><ellipse cx="{cx}" cy="{cy + 5}" rx="30" ry="6" fill="{SHADE}" fill-opacity=".14"/>'
             f'<use href="#fl" fill="#e9843f" transform="translate({cx} {cy}) scale(1.8 .72)"/>'
             f'<use href="#fl" fill="#f6b27a" transform="translate({cx} {cy - 1}) scale(1 .4) rotate(22)"/>'
             f'<ellipse cx="{cx}" cy="{cy - 1}" rx="5" ry="3.4" fill="#b8541d"/></g>')
