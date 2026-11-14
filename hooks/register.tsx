@@ -62,7 +62,7 @@ const isVeil = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100
 
 const USAGE =
-  '用法：/maid-room motion on 或 off（背景动画，默认开）；/maid-room veil 0到100（聊天栏面板的浓度，越小人物越清楚，越大文字越好读）；/maid-room vector（矢量背景，一定能显示）；/maid-room image（位图原画，部分 App 版本不显示）'
+  '用法：/maid-room motion on 或 off（背景动画，默认关）；/maid-room veil 0到100（聊天栏面板的浓度，越小人物越清楚，越大文字越好读）；/maid-room vector（矢量背景，一定能显示）；/maid-room image（位图原画，部分 App 版本不显示）'
 
 // 读出上次保存的选择（跨会话保留），没存过或存坏了就用默认值
 const stored = async ($: { store: { get: (key: string) => Promise<unknown> } }) => {
@@ -72,7 +72,8 @@ const stored = async ($: { store: { get: (key: string) => Promise<unknown> } }) 
   const settings: Settings = {
     mode: isMode(mode) ? mode : 'vector',
     veil: isVeil(veil) ? veil : DEFAULT_VEIL,
-    motion: typeof motion === 'boolean' ? motion : true,
+    // 动画默认关：开着时要持续重画，耗电还没在 App 里实测过，想要动态用 /maid-room motion on 打开
+    motion: typeof motion === 'boolean' ? motion : false,
   }
 
   return settings
