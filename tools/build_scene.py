@@ -125,7 +125,7 @@ WAVES = [
     (356, 14, 880, -300, '#edc2a4', .9),
 ]
 POND = (300, 156)   # 落花的位置（条带坐标），在第一层波浪的水面上
-RINGS = [(40, .95), (86, .8), (142, .62), (210, .45), (292, .3)]
+RINGS = [(40, .6), (86, .48), (142, .36), (210, .26), (292, .16)]
 SHADE = '#a8704c'   # 阴影用的暖棕色
 # 人物坐的软垫（右下角层的坐标）：从人物左边的波浪里隆起，垫在裙子下面，一直到窗口右边
 CUSHION = 'M930 1000V800C1030 770 1090 610 1200 552C1290 506 1430 500 1600 514V1000Z'
@@ -143,9 +143,9 @@ def wave_path(baseline, amp, wavelength, x0):
 def papercut(rim_id, fill, white='#fff'):
     """剪纸式的一层：顶边线往上错开、加宽、半透明，先画；再画本层，盖住下半截，
     露出来的就是边缘上方的一道影子；最后描一道白边。不用模糊滤镜，绘制开销很小。"""
-    return (f'<use href="#{rim_id}" stroke-width="18" stroke-opacity=".08" transform="translate(0 -6)"/>'
-            f'<use href="#{rim_id}" stroke-width="7" stroke-opacity=".13" transform="translate(0 -2)"/>'
-            f'{fill}<use href="#{rim_id}" stroke="{white}" stroke-width="1.8" stroke-opacity=".9"/>')
+    return (f'<use href="#{rim_id}" stroke-width="18" stroke-opacity=".05" transform="translate(0 -6)"/>'
+            f'<use href="#{rim_id}" stroke-width="7" stroke-opacity=".08" transform="translate(0 -2)"/>'
+            f'{fill}<use href="#{rim_id}" stroke="{white}" stroke-width="1.1" stroke-opacity=".45"/>')
 
 
 def decor():
@@ -155,7 +155,7 @@ def decor():
     后面的波浪会盖住波纹和软垫的下半截，所以波纹只出现在水面那一层，线条不会互相穿插。"""
     defs = ['<path id="pt" d="M0 0q6-9 0-19q-6 10 0 19z"/>',
             '<g id="fl">' + '<use href="#pt"/>' + ''.join(f'<use href="#pt" transform="rotate({a})"/>' for a in range(45, 360, 45)) + '</g>',
-            '<radialGradient id="pool"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>',
+            '<radialGradient id="pool"><stop offset="0" stop-color="#fff" stop-opacity=".4"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>',
             '<linearGradient id="win" gradientUnits="userSpaceOnUse" x2="330" y2="430"><stop offset="0" stop-color="#fff" stop-opacity=".46"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>',
             # 软垫的填充和描边都向下淡出：波浪是半透明的，不淡出的话软垫的下半截会透出一块生硬的形状
             '<linearGradient id="cu" gradientUnits="userSpaceOnUse" x2="0" y1="500" y2="790"><stop offset="0" stop-color="#fdf7f0"/><stop offset=".5" stop-color="#f6e3d1" stop-opacity=".95"/><stop offset="1" stop-color="#f0d2ba" stop-opacity="0"/></linearGradient>',
@@ -182,7 +182,7 @@ def decor():
             f'<ellipse cx="{cx}" cy="{cy}" rx="360" ry="62" fill="url(#pool)" stroke="none"/>'
             # 每道波纹下面错开一点描一道暗边，像水面的起伏
             f'<g stroke-width="1.6" transform="translate(0 1.5)" opacity=".18">{rings}</g>'
-            f'<g stroke="#fff" stroke-width="2">{rings}</g></g>'
+            f'<g stroke="#fff" stroke-width="1.3">{rings}</g></g>'
             # 落在水面上的一朵橙花（和发饰同款），压扁表示平躺；下面一小片影子
             f'<g stroke="none"><ellipse cx="{cx}" cy="{cy + 5}" rx="30" ry="6" fill="{SHADE}" fill-opacity=".14"/>'
             f'<use href="#fl" fill="#e9843f" transform="translate({cx} {cy}) scale(1.8 .72)"/>'
@@ -197,10 +197,10 @@ def decor():
         + band(layers[0] + pond))
     # 软垫和波浪同一种剪纸画法；边上缀一串蕾丝圆点，呼应裙边的蕾丝
     cushion = ('<g fill="none" stroke="url(#cd)">' + papercut('rc', f'<path d="{CUSHION}" fill="url(#cu)" stroke="none"/>', 'url(#cw)')
-               + '<use href="#rc" stroke="url(#cw)" stroke-width="3.4" stroke-opacity=".95" stroke-dasharray="0 10" stroke-linecap="round" transform="translate(0 11)"/></g>')
+               + '<use href="#rc" stroke="url(#cw)" stroke-width="3" stroke-opacity=".8" stroke-dasharray="0 10" stroke-linecap="round" transform="translate(0 11)"/></g>')
     front = (band(''.join(layers[1:])
                   # 第四层下方走一道细金线，呼应裙摆的金色滚边
-                  + '<use href="#r3" stroke="#b97a42" stroke-width="1.3" stroke-opacity=".7" transform="translate(0 12)"/>')
+                  + '<use href="#r3" stroke="#b97a42" stroke-width="1.1" stroke-opacity=".45" transform="translate(0 12)"/>')
              # 几片随波漂开的花瓣
              + '<svg width="100%" height="100%" viewBox="0 0 1600 1000" preserveAspectRatio="xMinYMax meet"><g fill="#e8833f" fill-opacity=".85">'
              + ''.join(f'<use href="#pt" transform="translate({x} {y}) rotate({a}) scale({s})"/>'
